@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -12,11 +13,13 @@ local Camera = Workspace.CurrentCamera
 -- =========================================================
 local Config = {
 	AimbotEnabled = false,
+	TriggerbotEnabled = false,
 	EspEnabled = false,
 	EspNew2Enabled = false,
 	MouseUnlocked = false,
 	
 	AimbotBind = Enum.KeyCode.Z,
+	TriggerbotBind = Enum.KeyCode.T,
 	EspBind = Enum.KeyCode.X,
 	MouseBind = Enum.KeyCode.M,
 	
@@ -106,7 +109,6 @@ btnGradient.Color = ColorSequence.new({
 btnGradient.Rotation = 45
 btnGradient.Parent = ToggleButton
 
--- Анимация наведения на кнопку
 ToggleButton.MouseEnter:Connect(function()
 	TweenService:Create(ToggleButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		Size = UDim2.fromOffset(54, 54)
@@ -125,7 +127,6 @@ ToggleButton.MouseLeave:Connect(function()
 	}):Play()
 end)
 
--- Перетаскивание и нажатие
 local btnDragging = false
 local btnDragStart, btnStartPos, startMousePos
 local dragThreshold = 5
@@ -163,7 +164,7 @@ end)
 -- =========================================================
 MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.fromOffset(330, 430)
+MainFrame.Size = UDim2.fromOffset(330, 480)
 MainFrame.Position = UDim2.new(0.12, 0, 0.2, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(11, 15, 24)
 MainFrame.BorderSizePixel = 0
@@ -188,7 +189,6 @@ MainGradient.Color = ColorSequence.new({
 MainGradient.Rotation = 90
 MainGradient.Parent = MainFrame
 
--- Шапка управления
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 44)
 TitleBar.BackgroundColor3 = Color3.fromRGB(7, 10, 17)
@@ -221,7 +221,6 @@ local dotCorner = Instance.new("UICorner")
 dotCorner.CornerRadius = UDim.new(1, 0)
 dotCorner.Parent = StatusDot
 
--- Перетаскивание окна
 local dragging, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -242,7 +241,6 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
--- Изменение размера
 local Resizer = Instance.new("TextButton")
 Resizer.Size = UDim2.new(0, 18, 0, 18)
 Resizer.Position = UDim2.new(1, -18, 1, -18)
@@ -275,7 +273,6 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
--- Контейнер с прокруткой
 local Container = Instance.new("ScrollingFrame")
 Container.Size = UDim2.new(1, -16, 1, -54)
 Container.Position = UDim2.new(0, 8, 0, 48)
@@ -431,7 +428,16 @@ local aimBindBtn = createBindButton(aimToggle.Frame, Config.AimbotBind, function
 end)
 aimBindBtn.Position = UDim2.new(1, -124, 0.5, -11)
 
--- 2. ESP OLD (EXPANDABLE)
+-- 2. TRIGGERBOT
+local triggerToggle = createToggle(Container, "⚡ Triggerbot (60 CPS)", Config.TriggerbotEnabled, function(v)
+	Config.TriggerbotEnabled = v
+end)
+local triggerBindBtn = createBindButton(triggerToggle.Frame, Config.TriggerbotBind, function(newBind)
+	Config.TriggerbotBind = newBind
+end)
+triggerBindBtn.Position = UDim2.new(1, -124, 0.5, -11)
+
+-- 3. ESP OLD (EXPANDABLE)
 local espHeaderFrame = Instance.new("Frame")
 espHeaderFrame.Size = UDim2.new(1, 0, 0, 38)
 espHeaderFrame.BackgroundColor3 = Color3.fromRGB(16, 23, 36)
@@ -549,7 +555,7 @@ subList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	end
 end)
 
--- 3. ESP NEW 2.0 (LOADER)
+-- 4. ESP NEW 2.0 (LOADER)
 local espNew2Toggle = createToggle(Container, "👁️ ESP New 2.0", Config.EspNew2Enabled, function(enabled)
 	Config.EspNew2Enabled = enabled
 	if enabled then
@@ -561,7 +567,7 @@ local espNew2Toggle = createToggle(Container, "👁️ ESP New 2.0", Config.EspN
 	end
 end)
 
--- 4. UNLOCK MOUSE
+-- 5. UNLOCK MOUSE
 local mouseToggle = createToggle(Container, "🖱️ Unlock Mouse", Config.MouseUnlocked, function(enabled)
 	Config.MouseUnlocked = enabled
 	modalButton.Modal = enabled
@@ -589,6 +595,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
 	if isMatching(Config.AimbotBind) then
 		aimToggle.SetState(not aimToggle.GetState())
+	elseif isMatching(Config.TriggerbotBind) then
+		triggerToggle.SetState(not triggerToggle.GetState())
 	elseif isMatching(Config.EspBind) then
 		Config.EspEnabled = not Config.EspEnabled
 		updateEspState()
@@ -602,7 +610,7 @@ ESPFolder.Name = "ESP_Container"
 ESPFolder.Parent = ScreenGui
 
 -- =========================================================
--- ESP & AIMBOT МЕХАНИКА (60 FPS)
+-- ESP & AIMBOT & TRIGGERBOT МЕХАНИКА
 -- =========================================================
 local function getRoot(model)
 	return model.PrimaryPart
@@ -664,7 +672,6 @@ end
 local function createESP(model, isPlayer)
 	local color = isPlayer and Config.PlayerColor or Config.BotColor
 
-	-- 2D Прямоугольная рамка
 	local box = Instance.new("Frame")
 	box.Name = "Box"
 	box.BackgroundTransparency = 1
@@ -677,7 +684,6 @@ local function createESP(model, isPlayer)
 	boxStroke.Thickness = 1.5
 	boxStroke.Parent = box
 
-	-- Информация Имени и Дистанции
 	local label = Instance.new("TextLabel")
 	label.Name = "Info"
 	label.Size = UDim2.fromOffset(240, 45)
@@ -689,7 +695,6 @@ local function createESP(model, isPlayer)
 	label.Font = Enum.Font.GothamBold
 	label.Parent = box
 
-	-- Шкала ХП
 	local healthBg = Instance.new("Frame")
 	healthBg.Name = "HealthBackground"
 	healthBg.Size = UDim2.new(0, 4, 1, 0)
@@ -703,7 +708,6 @@ local function createESP(model, isPlayer)
 	healthBar.BorderSizePixel = 0
 	healthBar.Parent = healthBg
 
-	-- Текст ХП (Повернут на 90 градусов влево)
 	local hpText = Instance.new("TextLabel")
 	hpText.Name = "HPText"
 	hpText.Size = UDim2.fromOffset(50, 18)
@@ -716,7 +720,6 @@ local function createESP(model, isPlayer)
 	hpText.Font = Enum.Font.GothamBold
 	hpText.Parent = box
 
-	-- Контур (Highlight / Chams)
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "ESPHighlight"
 	highlight.Adornee = model
@@ -727,7 +730,6 @@ local function createESP(model, isPlayer)
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	highlight.Parent = ESPFolder
 
-	-- Трейсер
 	local tracer = Instance.new("Frame")
 	tracer.Name = "Tracer"
 	tracer.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -763,6 +765,16 @@ local function isVisible(targetModel, targetHead)
 	return rayResult == nil
 end
 
+local function executeClick()
+	if mouse1click then
+		mouse1click()
+	else
+		local vp = Camera.ViewportSize / 2
+		VirtualInputManager:SendMouseButtonEvent(vp.X, vp.Y, 0, true, game, 0)
+		VirtualInputManager:SendMouseButtonEvent(vp.X, vp.Y, 0, false, game, 0)
+	end
+end
+
 -- =========================================================
 -- ОСНОВНОЙ РЕНДЕР-ЦИКЛ (60 FPS)
 -- =========================================================
@@ -777,7 +789,7 @@ RunService.RenderStepped:Connect(function()
 
 	local currentTargets = {}
 
-	if Config.EspEnabled or Config.AimbotEnabled then
+	if Config.EspEnabled or Config.AimbotEnabled or Config.TriggerbotEnabled then
 		for _, object in ipairs(Workspace:GetDescendants()) do
 			if object:IsA("Model") and isValidTarget(object) then
 				local player = Players:GetPlayerFromCharacter(object)
@@ -785,6 +797,28 @@ RunService.RenderStepped:Connect(function()
 					IsPlayer = (player ~= nil),
 					Player = player
 				}
+			end
+		end
+	end
+
+	-- Triggerbot (Быстрая стрельба при наведении по центру экрана)
+	if Config.TriggerbotEnabled then
+		local centerRay = Camera:ViewportPointToRay(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+		local rayParams = RaycastParams.new()
+		rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+		local ignoreList = {Camera}
+		if LocalPlayer.Character then
+			table.insert(ignoreList, LocalPlayer.Character)
+		end
+		rayParams.FilterDescendantsInstances = ignoreList
+		rayParams.IgnoreWater = true
+
+		local rayResult = Workspace:Raycast(centerRay.Origin, centerRay.Direction * 1000, rayParams)
+		if rayResult and rayResult.Instance then
+			local targetModel = rayResult.Instance:FindFirstAncestorOfClass("Model")
+			if targetModel and isValidTarget(targetModel) then
+				executeClick()
 			end
 		end
 	end
@@ -823,12 +857,10 @@ RunService.RenderStepped:Connect(function()
 					local height = math.clamp(math.abs(headPos.Y - bottomPos.Y), 8, 1000)
 					local width = height * 0.55
 
-					-- 2D Прямоугольник
 					data.Box.Position = UDim2.fromOffset(rootPos.X - width / 2, headPos.Y)
 					data.Box.Size = UDim2.fromOffset(width, height)
 					data.Box.Visible = Config.ShowBox
 
-					-- Текст Имени и Дистанции
 					if Config.ShowNames or Config.ShowDistance then
 						data.Label.Visible = true
 						local textStr = ""
@@ -848,7 +880,6 @@ RunService.RenderStepped:Connect(function()
 						data.Label.Visible = false
 					end
 
-					-- Повернутое ХП (100.0 / 85.3)
 					if Config.ShowHealth and humanoid and humanoid.MaxHealth > 0 then
 						data.HealthBg.Visible = true
 						data.HPText.Visible = true
@@ -866,7 +897,6 @@ RunService.RenderStepped:Connect(function()
 						data.HPText.Visible = false
 					end
 
-					-- Трейсер
 					if Config.ShowTracers then
 						data.Tracer.Visible = true
 						local screenTop = Vector2.new(Camera.ViewportSize.X / 2, 0)
