@@ -13,6 +13,7 @@ local Camera = Workspace.CurrentCamera
 local Config = {
 	AimbotEnabled = false,
 	EspEnabled = false,
+	EspNew2Enabled = false,
 	MouseUnlocked = false,
 	
 	AimbotBind = Enum.KeyCode.Z,
@@ -430,7 +431,7 @@ local aimBindBtn = createBindButton(aimToggle.Frame, Config.AimbotBind, function
 end)
 aimBindBtn.Position = UDim2.new(1, -124, 0.5, -11)
 
--- 2. ESP MASTER + EXPANDABLE
+-- 2. ESP OLD (EXPANDABLE)
 local espHeaderFrame = Instance.new("Frame")
 espHeaderFrame.Size = UDim2.new(1, 0, 0, 38)
 espHeaderFrame.BackgroundColor3 = Color3.fromRGB(16, 23, 36)
@@ -464,7 +465,7 @@ local espTitle = Instance.new("TextLabel")
 espTitle.Size = UDim2.new(0.4, 0, 1, 0)
 espTitle.Position = UDim2.new(0, 38, 0, 0)
 espTitle.BackgroundTransparency = 1
-espTitle.Text = "👁️ ESP Master"
+espTitle.Text = "👁️ ESP Old"
 espTitle.TextColor3 = Color3.fromRGB(215, 235, 255)
 espTitle.TextSize = 12
 espTitle.Font = Enum.Font.GothamMedium
@@ -532,7 +533,7 @@ espMainBtn.MouseButton1Click:Connect(function()
 end)
 updateEspState()
 
--- Подкатегории ESP
+-- Подкатегории ESP Old
 createToggle(espSubContainer, "   └ Show Players", Config.ShowPlayers, function(v) Config.ShowPlayers = v end)
 createToggle(espSubContainer, "   └ Show Bots", Config.ShowBots, function(v) Config.ShowBots = v end)
 createToggle(espSubContainer, "   └ 2D Boxes", Config.ShowBox, function(v) Config.ShowBox = v end)
@@ -548,7 +549,19 @@ subList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	end
 end)
 
--- 3. UNLOCK MOUSE
+-- 3. ESP NEW 2.0 (LOADER)
+local espNew2Toggle = createToggle(Container, "👁️ ESP New 2.0", Config.EspNew2Enabled, function(enabled)
+	Config.EspNew2Enabled = enabled
+	if enabled then
+		task.spawn(function()
+			pcall(function()
+				loadstring(game:HttpGet("https://raw.githubusercontent.com/L5ks8/Esp/main/loader"))()
+			end)
+		end)
+	end
+end)
+
+-- 4. UNLOCK MOUSE
 local mouseToggle = createToggle(Container, "🖱️ Unlock Mouse", Config.MouseUnlocked, function(enabled)
 	Config.MouseUnlocked = enabled
 	modalButton.Modal = enabled
