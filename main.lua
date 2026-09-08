@@ -17,11 +17,13 @@ local Config = {
 	EspEnabled = false,
 	EspNew2Enabled = false,
 	MouseUnlocked = false,
+	WallbangEnabled = false,
 	
 	AimbotBind = Enum.KeyCode.Z,
 	TriggerbotBind = Enum.KeyCode.T,
 	EspBind = Enum.KeyCode.X,
 	MouseBind = Enum.KeyCode.M,
+	WallbangBind = Enum.KeyCode.B,
 	
 	ShowPlayers = true,
 	ShowBots = true,
@@ -37,6 +39,7 @@ local Config = {
 }
 
 local activeESPs = {}
+local currentTargets = {}
 
 -- =========================================================
 -- MAIN GUI & VIRTUAL CURSOR
@@ -582,6 +585,15 @@ local mouseBindBtn = createBindButton(mouseToggle.Frame, Config.MouseBind, funct
 end)
 mouseBindBtn.Position = UDim2.new(1, -124, 0.5, -11)
 
+-- 6. WALLBANG (ПРОСТРЕЛ СКВОЗЬ СТЕНЫ) - ДОБАВЛЕНО В КОНЕЦ
+local wallbangToggle = createToggle(Container, "🧱 Wallbang (Through Walls)", Config.WallbangEnabled, function(enabled)
+	Config.WallbangEnabled = enabled
+end)
+local wallbangBindBtn = createBindButton(wallbangToggle.Frame, Config.WallbangBind, function(newBind)
+	Config.WallbangBind = newBind
+end)
+wallbangBindBtn.Position = UDim2.new(1, -124, 0.5, -11)
+
 -- Бинд контроллер
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
@@ -602,6 +614,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		updateEspState()
 	elseif isMatching(Config.MouseBind) then
 		mouseToggle.SetState(not mouseToggle.GetState())
+	elseif isMatching(Config.WallbangBind) then
+		wallbangToggle.SetState(not wallbangToggle.GetState())
 	end
 end)
 
@@ -610,7 +624,7 @@ ESPFolder.Name = "ESP_Container"
 ESPFolder.Parent = ScreenGui
 
 -- =========================================================
--- ESP & AIMBOT & TRIGGERBOT МЕХАНИКА
+-- ESP & AIMBOT & TRIGGERBOT & WALLBANG МЕХАНИКА
 -- =========================================================
 local function getRoot(model)
 	return model.PrimaryPart
@@ -750,6 +764,8 @@ local function createESP(model, isPlayer)
 end
 
 local function isVisible(targetModel, targetHead)
+	if Config.WallbangEnabled then return true end
+
 	local localChar = LocalPlayer.Character
 	if not localChar then return false end
 
@@ -776,6 +792,51 @@ local function executeClick()
 end
 
 -- =========================================================
+-- HOOK ДЛЯ СТРЕЛЬБЫ СКВОЗЬ СТЕНЫ (WALLBANG)
+-- =========================================================
+local oldNamecall
+if hookmetamethod then
+	oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+		local method = getnamecallmethod()
+		local args = {...}
+
+		if Config.WallbangEnabled and not checkcaller() then
+			if method == "Raycast" and self == Workspace then
+				local origin, direction, rayParams = args[1], args[2], args[3]
+				local params = rayParams or RaycastParams.new()
+				
+				local ignoreList = {Camera}
+				if LocalPlayer.Character then table.insert(ignoreList, LocalPlayer.Character) end
+
+				for _, child in ipairs(Workspace:GetChildren()) do
+					if child ~= Camera and child ~= LocalPlayer.Character then
+						local isTarget = false
+						for targetModel in pairs(currentTargets) do
+							if child == targetModel or targetModel:IsDescendantOf(child) then
+								isTarget = true
+								break
+							end
+						end
+						if not isTarget then
+							table.insert(ignoreList, child)
+						end
+					end
+				end
+
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.FilterDescendantsInstances = ignoreList
+				params.IgnoreWater = true
+				args[3] = params
+
+				return oldNamecall(self, unpack(args))
+			end
+		end
+
+		return oldNamecall(self, ...)
+	end)
+end
+
+-- =========================================================
 -- ОСНОВНОЙ РЕНДЕР-ЦИКЛ (60 FPS)
 -- =========================================================
 RunService.RenderStepped:Connect(function()
@@ -787,9 +848,9 @@ RunService.RenderStepped:Connect(function()
 		virtualCursor.Visible = false
 	end
 
-	local currentTargets = {}
+	table.clear(currentTargets)
 
-	if Config.EspEnabled or Config.AimbotEnabled or Config.TriggerbotEnabled then
+	if Config.EspEnabled or Config.AimbotEnabled or Config.TriggerbotEnabled or Config.WallbangEnabled then
 		for _, object in ipairs(Workspace:GetDescendants()) do
 			if object:IsA("Model") and isValidTarget(object) then
 				local player = Players:GetPlayerFromCharacter(object)
@@ -801,7 +862,7 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	-- Triggerbot (Быстрая стрельба при наведении по центру экрана)
+	-- Triggerbot (Быстрая стрельба при наведении, в том числе через стены при включенном Wallbang)
 	if Config.TriggerbotEnabled then
 		local centerRay = Camera:ViewportPointToRay(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 		local rayParams = RaycastParams.new()
@@ -811,6 +872,24 @@ RunService.RenderStepped:Connect(function()
 		if LocalPlayer.Character then
 			table.insert(ignoreList, LocalPlayer.Character)
 		end
+
+		if Config.WallbangEnabled then
+			for _, child in ipairs(Workspace:GetChildren()) do
+				if child ~= Camera and child ~= LocalPlayer.Character then
+					local isTarget = false
+					for targetModel in pairs(currentTargets) do
+						if child == targetModel or targetModel:IsDescendantOf(child) then
+							isTarget = true
+							break
+						end
+					end
+					if not isTarget then
+						table.insert(ignoreList, child)
+					end
+				end
+			end
+		end
+
 		rayParams.FilterDescendantsInstances = ignoreList
 		rayParams.IgnoreWater = true
 
